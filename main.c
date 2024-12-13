@@ -116,46 +116,59 @@ int main(int argc, char *argv[])
 
   setlocale(LC_NUMERIC, "C");
 
-  if((argc!=2)&&(argc!=3))
+  if((argc!=2) && (argc!=3) && (argc!=4))
   {
-    printf("\nNihon Kohden to EDF(+) converter. ver. 1.5\n"
-             "Copyright 2007 - 2019 Teunis van Beelen\n"
-             "Email: teuniz@protonmail.com\n"
-             "This software is licensed under the GNU GENERAL PUBLIC LICENSE Version 3.\n\n"
-             "Usage: nk2edf [-no-annotations] <filename>\n\n"
-             "normal use: nk2edf <filename>\n"
-             "Three files are needed with the extions .eeg, .pnt and .log\n"
-             "this will create an EDF+ file including annotations.\n\n"
-             "A *.21E file will be used (if present) to read in alternative electrode names.\n\n"
-             "If only the .eeg file is available, use: nk2edf -no-annotations <filename>\n"
-             "this will create an EDF file without annotations.\n\n");
-    return(1);
+      printf("\nNihon Kohden to EDF(+) converter. ver. 1.5\n"
+            "Copyright 2007 - 2019 Teunis van Beelen\n"
+            "Email: teuniz@protonmail.com\n"
+            "This software is licensed under the GNU GENERAL PUBLIC LICENSE Version 3.\n\n"
+            "Usage: nk2edf [-no-annotations] <filename> [output_path]\n\n"
+            "normal use: nk2edf <filename> [output_path]\n"
+            "Three files are needed with the extions .eeg, .pnt and .log\n"
+            "this will create an EDF+ file including annotations.\n\n"
+            "A *.21E file will be used (if present) to read in alternative electrode names.\n\n"
+            "If only the .eeg file is available, use: nk2edf -no-annotations <filename> [output_path]\n"
+            "this will create an EDF file without annotations.\n\n"
+            "output_path: optional parameter to specify output directory\n\n");
+      return(1);
   }
 
-  if(argc==2)
+  char output_path[512] = "";
+  const char *input_filename;
+
+  if(argc == 2)
   {
-    strcpy(path, argv[1]);
-    edfplus = 1;
+      strcpy(path, argv[1]);
+      edfplus = 1;
+      input_filename = argv[1];
   }
-  else
+  else if(argc == 3)
   {
-    strcpy(path, argv[2]);
-    if(strcmp(argv[1], "-no-annotations"))
-    {
-      printf("\nNihon Kohden to EDF(+) converter. ver. 1.4\n"
-             "Copyright 2007 - 2019 Teunis van Beelen\n"
-             "Email: teuniz@protonmail.com\n"
-             "This software is licensed under the GNU GENERAL PUBLIC LICENSE Version 3.\n\n"
-             "Usage: nk2edf [-no-annotations] <filename>\n\n"
-             "normal use: nk2edf <filename>\n"
-             "Three files are needed with the extions .eeg, .pnt and .log\n"
-             "this will create an EDF+ file including annotations.\n\n"
-             "A *.21E file will be used (if present) to read in alternative electrode names.\n\n"
-             "If only the .eeg file is available, use: nk2edf -no-annotations <filename>\n"
-             "this will create an EDF file without annotations.\n\n");
-      return(1);
-    }
-    edfplus = 0;
+      if(strcmp(argv[1], "-no-annotations") == 0)
+      {
+          strcpy(path, argv[2]);
+          edfplus = 0;
+          input_filename = argv[2];
+      }
+      else
+      {
+          strcpy(path, argv[1]);
+          edfplus = 1;
+          input_filename = argv[1];
+          strcpy(output_path, argv[2]);
+      }
+  }
+  else if(argc == 4)
+  {
+      if(strcmp(argv[1], "-no-annotations") != 0)
+      {
+          printf("Invalid arguments\n");
+          return(1);
+      }
+      strcpy(path, argv[2]);
+      edfplus = 0;
+      input_filename = argv[2];
+      strcpy(output_path, argv[3]);
   }
 
   pathlen = strlen(path);
@@ -572,10 +585,52 @@ int main(int argc, char *argv[])
 
    /********************************************************************/
 
-      if(edfplus)  sprintf(path + pathlen - 4, "_%u-%u+.edf", i + 1, j + 1);
-      else  sprintf(path + pathlen - 4, "_%u-%u.edf", i + 1, j + 1);
+      char output_file_path[1024];
 
-      outputfile = fopeno(path, "wb");
+      if(strlen(output_path) > 0) {
+          // 如果输出路径包含文件名和扩展名，直接使用
+          if(strstr(output_path, ".edf")) {
+              strncpy(output_file_path, output_path, sizeof(output_file_path) - 1);
+              output_file_path[sizeof(output_file_path) - 1] = '\0';
+          } 
+          // 否则按照目录处理
+          else {
+              // 获取原文件名（去除路径）
+              const char *basename = path;
+              const char *tmp;
+              
+              // 处理不同的路径分隔符
+              tmp = strrchr(path, '/');
+              if(tmp) basename = tmp + 1;
+              tmp = strrchr(path, '\\');
+              if(tmp && tmp > basename) basename = tmp + 1;
+              
+              // 更改文件扩展名为.edf
+              char base_name_with_ext[256];
+              strncpy(base_name_with_ext, basename, sizeof(base_name_with_ext) - 5);
+              base_name_with_ext[sizeof(base_name_with_ext) - 5] = '\0';
+              strcat(base_name_with_ext, ".edf");
+              
+              // 构建输出路径
+              char separator = '/';  // 或在 Windows 下使用 '\\'
+              if(output_path[strlen(output_path) - 1] == separator) {
+                  snprintf(output_file_path, sizeof(output_file_path), "%s%s", 
+                          output_path, base_name_with_ext);
+              } else {
+                  snprintf(output_file_path, sizeof(output_file_path), "%s%c%s", 
+                          output_path, separator, base_name_with_ext);
+              }
+          }
+      } else {
+          // 更改文件扩展名为.edf
+          path[pathlen - 4] = '\0';
+          strcat(path, ".edf");
+          strcpy(output_file_path, path);
+      }
+
+
+      printf("Opening file %s for writing.\n", output_file_path);
+      outputfile = fopeno(output_file_path, "wb");
       if(outputfile==NULL)
       {
         printf("Can not open file %s for writing.\n", path);
